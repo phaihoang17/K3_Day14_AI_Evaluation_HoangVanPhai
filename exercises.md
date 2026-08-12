@@ -273,19 +273,19 @@ verbosity bias và self-preference bằng cách nào?
 Chỉ làm sau khi hoàn thành 3.1–3.3. Chọn hai framework trong RAGAS, DeepEval
 và TruLens; chạy hoặc thiết kế một so sánh có cùng input dataset.
 
-| Tiêu chí | Framework 1: ____ | Framework 2: ____ |
+| Tiêu chí | Framework 1: RAGAS | Framework 2: TruLens |
 |---|---|---|
-| Setup complexity | | |
-| Metrics available | | |
-| CI/CD integration | | |
-| Kết quả trên cùng dataset | | |
-| Insight rút ra | | |
+| Setup complexity | Rất đơn giản, chỉ cần truyền input dataset và gọi hàm tính điểm. Không cần cài đặt theo dõi quá trình gọi LLM. | Phức tạp hơn, yêu cầu bọc (instrument) ứng dụng qua TruChain/TruLlama để capture trace (Recorder) trước khi chạy. |
+| Metrics available | Faithfulness, Answer Relevance, Context Precision, Context Recall. (Thiên về Information Retrieval). | Groundedness, Context Relevance, Answer Relevance (Triad of Metrics). Có hỗ trợ custom feedback functions mạnh mẽ. |
+| CI/CD integration | Dễ dàng qua Python SDK, phù hợp chạy offline pipeline. | Phù hợp hơn cho observability (Dashboard UI) và tracking online production hơn là chạy script CI tự động. |
+| Kết quả trên cùng dataset | Điểm phân bổ mượt (continuous) từ 0 đến 1 do dùng xác suất token sinh ra. | Điểm thường rơi vào các mốc cụ thể (ví dụ 0.0, 0.5, 1.0) do cơ chế LLM Prompting classification. |
+| Insight rút ra | Tìm ra lỗi hallucination rất nhạy qua metric Faithfulness. | Triad bám sát logic RAG, đặc biệt phát hiện các câu trả lời lạc đề tốt. |
 
-- Scores có nhất quán không?
-- Framework nào strict hơn và vì sao?
-- Hai framework có tìm ra cùng failure cases không?
+- Scores có nhất quán không? Nhìn chung là có, cả hai đều chỉ ra các câu hỏi Adversarial bị lỗi Groundedness/Faithfulness. Tuy nhiên thang điểm absolute sẽ lệch nhau (RAGAS chấm khắt khe Context Recall hơn).
+- Framework nào strict hơn và vì sao? RAGAS strict hơn về Retrieval (Context Metrics) do bóc tách chi tiết Precision và Recall, còn TruLens strict hơn về Groundedness thông qua các bước suy luận chặt chẽ (Chain of Thought).
+- Hai framework có tìm ra cùng failure cases không? Có, cả hai sẽ đều rate fail cho A01, A02, A03 do sinh ra câu trả lời không dựa trên ngữ cảnh.
 
-> *Phân tích:*
+> *Phân tích:* Việc chọn framework phụ thuộc vào giai đoạn. Trong CI/CD offline (đang làm) thì RAGAS/DeepEval phù hợp hơn vì dễ cấu hình input-output trực tiếp. Khi đã lên Production cần tracking theo thời gian thực (Observability) thì TruLens/LangSmith sẽ mạnh hơn nhờ Dashboard UI và Instrumentation.
 
 ### Exercise 3.5 — Retrieval Reranking (Bonus +5)
 
@@ -300,20 +300,20 @@ thay đổi Context Recall hay không.
 
 | ID | Recall before | Recall after | Precision before | Precision after | Delta Precision |
 |---|---:|---:|---:|---:|---:|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| **Avg** | | | | | |
+| M02 | 0.500 | 0.500 | 1.000 | 1.000 | +0.000 |
+| M04 | 0.667 | 0.667 | 0.887 | 0.887 | +0.000 |
+| M05 | 1.000 | 1.000 | 0.200 | 0.250 | +0.050 |
+| H04 | 1.000 | 1.000 | 0.583 | 0.833 | +0.250 |
+| A02 | 0.600 | 0.600 | 0.583 | 0.450 | -0.133 |
+| **Avg** | 0.753 | 0.753 | 0.650 | 0.684 | +0.034 |
 
 **Tại sao Recall dự kiến không đổi?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking chỉ thực hiện **sắp xếp lại (re-order)** các chunk đã được lấy về mà không nạp thêm chunk mới cũng không vứt bỏ chunk cũ. Vì Context Recall đo lường tổng lượng thông tin hữu ích có mặt trong toàn bộ tập retrieved_contexts (không quan tâm vị trí), nên dù xếp đổi chỗ thế nào thì tử số và mẫu số của Recall vẫn giữ nguyên.
 
 **Khi nào reranking không đủ và cần sửa retriever/query/chunking?**
 
-> *Câu trả lời:*
+> *Câu trả lời:* Reranking trở nên vô dụng nếu Recall ban đầu quá thấp. Tức là nếu Retriever không lấy được (miss) các tài liệu chứa thông tin cần thiết vào top-K (ví dụ top 100), thì bộ Reranker dù có giỏi cỡ nào cũng không thể lấy phần tử không có mặt lên đầu được. Khi đó bắt buộc phải sửa Embedding Model, tăng top-K, làm lại Chunking nhỏ/to hơn, hoặc bổ sung Query Expansion (HyDE) trước khi retrieve.
 
 ---
 
